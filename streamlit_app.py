@@ -3,7 +3,7 @@ from PIL import Image
 import numpy as np
 import itertools
 
-st.title("色範囲ペア判定（ヒットのみ表示）")
+st.title("色範囲ペア判定（グループ名表示）")
 
 uploaded_file = st.file_uploader("画像をアップロード", type=["png", "jpg", "jpeg"])
 
@@ -27,14 +27,14 @@ def match_gray(img):
     r = img[:,:,0]
     g = img[:,:,1]
     b = img[:,:,2]
-    
+
     cond1 = (np.abs(r - g) <= 20)
     cond2 = (np.abs(g - b) <= 20)
     cond3 = (np.abs(r - b) <= 20)
     cond4 = (r >= 30) & (r <= 240)
     cond5 = (g >= 30) & (g <= 240)
     cond6 = (b >= 30) & (b <= 240)
-    
+
     return cond1 & cond2 & cond3 & cond4 & cond5 & cond6
 
 if uploaded_file is not None:
@@ -45,18 +45,17 @@ if uploaded_file is not None:
 
     st.subheader("ヒットした色ペア")
 
-    # 各色の存在判定
+    # 色ごとの存在判定
     color_hits = {}
 
-    # 通常色
     for c in COLOR_RANGES:
         mask = match_range(img_array, c["min"], c["max"])
         color_hits[c["name"]] = np.any(mask)
 
-    # グレー（特別条件）
+    # グレー
     color_hits["グレー"] = np.any(match_gray(img_array))
 
-    # ペア判定
+    # ペア判定（名前で表示）
     hit_count = 0
     for c1, c2 in itertools.combinations(color_hits.keys(), 2):
         if color_hits[c1] and color_hits[c2]:
