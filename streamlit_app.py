@@ -1,22 +1,32 @@
 import streamlit as st
 from PIL import Image
 import numpy as np
-import itertools
 
-st.title("色範囲ペア判定（色名のみ表示）")
+st.title("色範囲ペア判定（指定ペアのみ）")
 
 uploaded_file = st.file_uploader("画像をアップロード", type=["png", "jpg", "jpeg"])
 
 # ===== 色範囲定義 =====
-COLOR_RANGES = [
-    {"name": "白", "min": [240,240,240], "max": [255,255,255]},
-    {"name": "黒", "min": [0,0,0], "max": [30,30,30]},
-    {"name": "赤", "min": [120,0,0], "max": [255,60,60]},
-    {"name": "水色", "min": [140,180,220], "max": [200,230,255]},
-    {"name": "緑", "min": [0,120,0], "max": [100,255,100]},
-    {"name": "黄色", "min": [150,100,0], "max": [255,200,80]},
-]
+COLOR_RANGES = {
+    "白": ([240,240,240], [255,255,255]),
+    "黒": ([0,0,0], [30,30,30]),
+    "赤": ([120,0,0], [255,60,60]),
+    "水色": ([140,180,220], [200,230,255]),
+    "緑": ([0,120,0], [100,255,100]),
+    "黄色": ([150,100,0], [255,200,80]),
+}
 # =====================
+
+# ===== 判定したいペア（固定）=====
+TARGET_PAIRS = [
+    ("白","黒"),("白","赤"),("白","水色"),("白","緑"),("白","黄色"),("白","グレー"),
+    ("黒","赤"),("黒","水色"),("黒","緑"),("黒","黄色"),("黒","グレー"),
+    ("赤","水色"),("赤","緑"),("赤","黄色"),("赤","グレー"),
+    ("水色","緑"),("水色","黄色"),("水色","グレー"),
+    ("緑","黄色"),("緑","グレー"),
+    ("黄色","グレー")
+]
+# ===============================
 
 def match_range(img, cmin, cmax):
     cmin = np.array(cmin)
@@ -48,17 +58,15 @@ if uploaded_file is not None:
     # 色存在判定
     color_hits = {}
 
-    for c in COLOR_RANGES:
-        mask = match_range(img_array, c["min"], c["max"])
-        color_hits[c["name"]] = np.any(mask)
+    for name, (cmin, cmax) in COLOR_RANGES.items():
+        color_hits[name] = np.any(match_range(img_array, cmin, cmax))
 
-    # グレー
     color_hits["グレー"] = np.any(match_gray(img_array))
 
-    # ペア表示（ヒットのみ・ラベルなし）
+    # 指定ペアのみ判定
     hit_count = 0
-    for c1, c2 in itertools.combinations(color_hits.keys(), 2):
-        if color_hits[c1] and color_hits[c2]:
+    for c1, c2 in TARGET_PAIRS:
+        if color_hits.get(c1, False) and color_hits.get(c2, False):
             st.write(f"{c1}：{c2}")
             hit_count += 1
 
