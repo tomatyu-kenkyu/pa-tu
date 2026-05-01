@@ -1,65 +1,94 @@
 import streamlit as st
-import requests
+import urllib.request
+import urllib.parse
+import hashlib
 from PIL import Image
+from collections import Counter
+from io import BytesIO
+import requests  # ← OCR用
 
-st.title("無料OCR（OCR.space × Streamlit 完全版）")
+# OCR APIキー
+OCR_API_KEY = "K87828255188957"
 
-API_KEY = "K87828255188957"
+def generate_screenshot_api_url(customer_key, secret_phrase, options):
+    api_url = 'https://api.screenshotmachine.com/?key=' + customer_key
+    if secret_phrase:
+        api_url += '&hash=' + hashlib.md5(
+            (options.get('url') + secret_phrase).encode('utf-8')
+        ).hexdigest()
+    api_url += '&' + urllib.parse.urlencode(options)
+    return api_url
 
-uploaded_file = st.file_uploader("画像をアップロード", type=["png", "jpg", "jpeg"])
+st.title("スクリーンショット → RGB解析 + OCR")
 
-if uploaded_file:
-    image = Image.open(uploaded_file)
-    st.image(image, caption="アップロード画像", use_column_width=True)
+# 入力
+customer_key = "82ef7e"
+secret_phrase = st.text_input("Secret Phrase（任意）", value="")
+target_url = st.text_input("スクリーンショットURL", value="https://www.google.com")
 
-    # サイズチェック（1MB制限）
-    if uploaded_file.size > 1 * 1024 * 1024:
-        st.error("画像サイズが大きすぎます（1MB以下にしてください）")
+if st.button("実行"):
+    options = {
+        'url': target_url,
+        'dimension': '1366x768',
+        'device': 'desktop',
+        'cacheLimit': '0',
+        'delay': '200',
+        'zoom': '100'
+    }
 
-    else:
-        if st.button("OCR実行"):
-            with st.spinner("解析中..."):
-                url = "https://api.ocr.space/parse/image"
+    # スクショURL生成
+    api_url = generate_screenshot_api_url(customer_key, secret_phrase, options)
 
-                files = {
-                    "file": (uploaded_file.name, uploaded_file, uploaded_file.type)
-                }
+    # 画像取得
+    with urllib.request.urlopen(api_url) as response:
+        image_data = response.read()
 
-                data = {
-                    "apikey": API_KEY,
-                    "language": "japanese",  # ← 重要（jpnはNG）
-                    "isOverlayRequired": False
-                }
+    img = Image.open(BytesIO(image_data)).convert("RGB")
 
-                try:
-                    response = requests.post(url, files=files, data=data)
-                    result = response.json()
+    # 表示
+    st.image(img, caption="取得したスクリーンショット", use_column_width=True)
 
-                    # デバッグ（必ず残すと便利）
-                    st.write("APIレスポンス", result)
+    # ------------------------
+    # 🎨 RGB解析
+    # ------------------------
+    pixels = list(img.getdata())
+    total_pixels = len(pixels)
+    color_count = Counter(pixels)
 
-                    # エラーチェック
-                    if result.get("IsErroredOnProcessing"):
-                        st.error("OCRエラーが発生しました")
-                        st.write(result.get("ErrorMessage"))
+    st.subheader("色の割合（上位20色）")
 
-                    elif "ParsedResults" not in result:
-                        st.error("解析結果が取得できませんでした")
-                        st.write(result)
+    for color, count in color_count.most_common(20):
+        ratio = count / total_pixels * 100
+        st.write(f"{color}: {count} ピクセル ({ratio:.2f}%)")
 
-                    else:
-                        parsed = result["ParsedResults"]
+    # ------------------------
+    # 🧠 OCR（ここ追加）
+    # ------------------------
+    st.subheader("OCR結果（文字抽出）")
 
-                        if not parsed or "ParsedText" not in parsed[0]:
-                            st.error("テキストが見つかりません")
-                            st.write(result)
+    # 画像をバイトとして送る
+    ocr_url = "https://api.ocr.space/parse/image"
 
-                        else:
-                            text = parsed[0]["ParsedText"]
+    files = {
+        'file': ('screenshot.png', image_data)
+    }
 
-                            st.success("抽出成功！")
-                            st.text_area("OCR結果", text, height=300)
+    payload = {
+        'apikey': OCR_API_KEY,
+        'language': 'jpn',
+        'detectOrientation': True,
+        'scale': True
+    }
 
-                except Exception as e:
-                    st.error("通信または処理エラー")
-                    st.write(str(e))
+    try:
+        r = requests.post(ocr_url, files=files, data=payload)
+        result = r.json()
+
+        if result.get("ParsedResults"):
+            text = result["ParsedResults"][0]["ParsedText"]
+            st.text_area("抽出されたテキスト", text, height=300)
+        else:
+            st.error("OCRに失敗しました")
+
+    except Exception as e:
+        st.error(f"OCRエラー: {e}")
