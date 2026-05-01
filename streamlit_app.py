@@ -1,12 +1,12 @@
 import streamlit as st
 import urllib.parse
-from PIL import Image
+from PIL import Image, ImageEnhance
 from collections import Counter
 from io import BytesIO
 import requests
 
 # 🔐 APIキー（本番はst.secrets推奨）
-OCR_API_KEY = "K87828255188957"
+OCR_API_KEY = "ここにOCR.spaceのAPIキー"
 SCREENSHOT_KEY = "82ef7e"
 
 def generate_screenshot_api_url(key, options):
@@ -14,11 +14,12 @@ def generate_screenshot_api_url(key, options):
     url += '&' + urllib.parse.urlencode(options)
     return url
 
-st.title("スクリーンショット → RGB解析 + OCR（最終版）")
+st.title("スクリーンショット → RGB解析 + OCR（最終完成版）")
 
 target_url = st.text_input("URL", value="https://example.com")
 
 if st.button("実行"):
+
     # ------------------------
     # 📸 スクリーンショット取得
     # ------------------------
@@ -62,41 +63,51 @@ if st.button("実行"):
         st.write(f"{color}: {ratio:.2f}%")
 
     # ------------------------
-    # 🧠 OCR（最重要）
+    # 🧠 OCR（強化版）
     # ------------------------
     st.subheader("OCR結果")
 
-    # 🔥 前処理（成功率の核）
-    img_ocr = img.convert("L")
-    img_ocr = img_ocr.resize((img.width * 2, img.height * 2))
+    # 🔥 OCR前処理（成功率の核）
+    img_ocr = img.convert("L")  # 白黒化
 
+    # サイズ制限＆拡大調整（OCR.space対策）
+    img_ocr.thumbnail((1000, 1000))
+
+    # コントラスト強化
+    enhancer = ImageEnhance.Contrast(img_ocr)
+    img_ocr = enhancer.enhance(2.0)
+
+    # バイト化
     buffer = BytesIO()
     img_ocr.save(buffer, format="PNG")
     image_data_ocr = buffer.getvalue()
 
+    # OCR送信
     files = {
         'file': ('image.png', image_data_ocr, 'image/png')
     }
 
     payload = {
         'apikey': OCR_API_KEY,
-        'language': 'eng',  # ← 安定優先
+        'language': 'eng',  # ←安定優先（日本語は弱い）
         'detectOrientation': True,
         'scale': True
     }
 
     try:
         r = requests.post("https://api.ocr.space/parse/image", files=files, data=payload)
-        result = r.json()
 
-        # デバッグ（残してOK）
+        # 🔍 デバッグ（重要）
         st.write("Status:", r.status_code)
+        st.json(r.json())
+
+        result = r.json()
 
         if result.get("ParsedResults") and result["ParsedResults"][0]["ParsedText"]:
             text = result["ParsedResults"][0]["ParsedText"]
             st.text_area("抽出結果", text, height=300)
         else:
-            st.error("OCR失敗（文字が小さい or API制限）")
+            st.error("OCR失敗（画像 or API制限）")
 
     except Exception as e:
         st.error(f"OCRエラー: {e}")
