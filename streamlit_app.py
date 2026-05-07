@@ -1,3 +1,6 @@
+import os
+os.environ["FLAGS_allocator_strategy"] = "auto_growth"
+
 import streamlit as st
 import urllib.parse
 import requests
@@ -15,7 +18,7 @@ from PIL import (
 from paddleocr import PaddleOCR
 
 # ------------------------
-# OCR 初期化
+# PaddleOCR 初期化
 # ------------------------
 @st.cache_resource
 def load_ocr():
@@ -27,7 +30,7 @@ def load_ocr():
 ocr = load_ocr()
 
 # ------------------------
-# スクショAPI
+# ScreenshotMachine API
 # ------------------------
 SCREENSHOT_KEY = "82ef7e"
 
@@ -55,53 +58,63 @@ danger_words = [
     "ブロック",
     "支払い",
     "クレジット",
-    "緊急"
+    "緊急",
+    "当選",
+    "クリック",
+    "インストール"
 ]
 
 # ------------------------
-# Streamlit
+# Streamlit UI
 # ------------------------
+st.set_page_config(
+    page_title="高精度OCR + 危険サイト解析",
+    layout="wide"
+)
+
 st.title("高精度 OCR + 危険サイト解析")
 
 target_url = st.text_input(
-    "URL",
+    "解析URL",
     value="https://example.com"
 )
 
 if st.button("解析開始"):
 
     # ------------------------
-    # スクショ取得
+    # スクリーンショット取得
     # ------------------------
-    options = {
-        "url": target_url,
-        "dimension": "1920x1080",
-        "device": "desktop",
-        "cacheLimit": "0",
-        "delay": "400"
-    }
+    with st.spinner("スクリーンショット取得中..."):
 
-    api_url = generate_screenshot_api_url(
-        SCREENSHOT_KEY,
-        options
-    )
+        options = {
+            "url": target_url,
+            "dimension": "1920x1080",
+            "device": "desktop",
+            "cacheLimit": "0",
+            "delay": "500"
+        }
 
-    try:
-        response = requests.get(api_url)
+        api_url = generate_screenshot_api_url(
+            SCREENSHOT_KEY,
+            options
+        )
 
-        if response.status_code != 200:
-            st.error(f"スクショ取得失敗: {response.status_code}")
+        try:
+            response = requests.get(api_url)
+
+            if response.status_code != 200:
+                st.error(f"スクショ取得失敗: {response.status_code}")
+                st.stop()
+
+            image_data = response.content
+
+            img = Image.open(
+                BytesIO(image_data)
+            ).convert("RGB")
+
+        except Exception as e:
+            st.error(f"画像取得エラー: {e}")
             st.stop()
-
-        image_data = response.content
-
-        img = Image.open(
-            BytesIO(image_data)
-        ).convert("RGB")
-
-    except Exception as e:
-        st.error(f"画像取得エラー: {e}")
-        st.stop()
 
     # ------------------------
     # 表示
@@ -234,7 +247,7 @@ if st.button("解析開始"):
         st.success("危険ワードなし")
 
     # ------------------------
-    # スコア
+    # 危険度スコア
     # ------------------------
     st.subheader("危険度スコア")
 
