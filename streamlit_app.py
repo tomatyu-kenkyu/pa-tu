@@ -6,7 +6,7 @@ from io import BytesIO
 import requests
 
 # 🔐 APIキー（本番はst.secrets推奨）
-OCR_API_KEY = "ここにOCR.spaceのAPIキー"
+OCR_API_KEY = "K87828255188957"
 SCREENSHOT_KEY = "82ef7e"
 
 def generate_screenshot_api_url(key, options):
