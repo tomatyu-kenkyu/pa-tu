@@ -1,28 +1,48 @@
-import mss
-import mss.tools
-from datetime import datetime
+from fastapi import FastAPI
+from pydantic import BaseModel
+from playwright.sync_api import sync_playwright
+import uuid
 import os
 
-def take_screenshot(save_dir="screenshots"):
-    # 保存フォルダ作成
-    os.makedirs(save_dir, exist_ok=True)
+app = FastAPI()
 
-    # ファイル名（日時）
-    filename = datetime.now().strftime("screenshot_%Y%m%d_%H%M%S.png")
-    filepath = os.path.join(save_dir, filename)
+# 保存フォルダ
+os.makedirs("shots", exist_ok=True)
 
-    with mss.mss() as sct:
-        # モニター全体取得（0 = 全画面）
-        monitor = sct.monitors[1]
-
-        img = sct.grab(monitor)
-
-        # 保存
-        mss.tools.to_png(img.rgb, img.size, output=filepath)
-
-    print(f"Saved: {filepath}")
-    return filepath
+class URLRequest(BaseModel):
+    url: str
 
 
-if __name__ == "__main__":
-    take_screenshot()
+def take_screenshot(url: str, path: str):
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page()
+
+        page.goto(url, wait_until="networkidle")
+
+        # ポップアップ除去
+        page.evaluate("""
+        () => {
+            document.querySelectorAll('[class*="cookie"],[class*="popup"],[class*="modal"],iframe,.overlay')
+            .forEach(el => el.remove());
+            document.body.style.overflow = "auto";
+        }
+        """)
+
+        page.wait_for_timeout(1000)
+        page.screenshot(path=path, full_page=True)
+
+        browser.close()
+
+
+@app.post("/screenshot")
+def screenshot(req: URLRequest):
+    file_id = str(uuid.uuid4())
+    file_path = f"shots/{file_id}.png"
+
+    take_screenshot(req.url, file_path)
+
+    return {
+        "status": "ok",
+        "file": file_path
+    }
