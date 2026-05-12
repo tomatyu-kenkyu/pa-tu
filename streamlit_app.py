@@ -15,7 +15,7 @@ API_KEY = "YOUR_API_KEY"
 def get_screenshot(url):
 
     params = {
-        "key": API_KEY,
+        "key": "82ef7e",
         "url": url,
 
         # Cookie対策
